@@ -1,47 +1,48 @@
-import kotlinx.coroutines.Deferred
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.async
-import kotlinx.coroutines.selects.select
+import kotlinx.coroutines.*
 import org.example.Client
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
 
 
-class TerminalController(val numOfTerminals: Int) {
-    private val terminals = mutableListOf<Deferred<Unit>>()
-    init {
-        repeat(numOfTerminals) {
-            terminals.add(GlobalScope.async { })
-        }
-    }
+@OptIn(ExperimentalCoroutinesApi::class, DelicateCoroutinesApi::class)
+class TerminalController(val name: String, numOfTerminals: Int, val clientsNum: Int) {
+    private val executorService: ExecutorService = Executors.newFixedThreadPool(numOfTerminals)
+    private var timer: Long = 0
+    private var canShotdown: Boolean = false
+//    init {
+//        repeat(numOfTerminals) {
+////            terminals.add(GlobalScope.async { })
+//            contexts.add(newSingleThreadContext("Terminal #$it"))
+//            terminals.add(CoroutineScope(contexts.last()).async {  })
+//        }
+//    }
 
-    suspend fun serveClient(client: Client) {
+    suspend fun serveClient(client: Client, index: Int) {
 // Find a free handler
-        val freeTerminal = terminals.indexOfFirst { it.isCompleted }
-
-        if (freeTerminal != -1) {
-// If a free handler is found, launch it with the element
-            terminals[freeTerminal] = GlobalScope.async { makeOrderOnTerminal(client) }
-        } else {
-// If no free handler is found, wait for any handler to become free
-            val firstCompleted = select {
-                terminals.forEach { handler ->
-                    handler.onAwait { terminals.indexOf(handler) }
-                }
-            }
-
-// Launch the selected handler with the element
-            terminals[firstCompleted] = GlobalScope.async {
-                makeOrderOnTerminal(client)
+        executorService.submit {
+            makeOrderOnTerminal(client)
+            if (index == 0) {
+                startTimer()
+            } else if (index == clientsNum - 1) {
+                executorService.shutdown()
+                println("ExecutorServiceShutDOwn")
+                val time = stopTimer()
+                println("Время работы кода ${name}: ${(time / 1000.0)} секунд")
             }
         }
     }
 
-    private suspend fun makeOrderOnTerminal(client: Client) {
-        println("Клиент номер ${client.id} начал обслуживание")
-        for (i in 0..client.orderTime) {
-            println("Обслуживается ${i + 1} секунду")
-        }
-        println("Клиент закончил обслуживание")
-        println()
+    private fun makeOrderOnTerminal(client: Client) {
+
+        Thread.sleep(0,10 * client.orderTime)
+    }
+
+    fun startTimer() {
+        timer = System.currentTimeMillis()
+    }
+
+    fun stopTimer(): Long {
+        return System.currentTimeMillis() - timer
     }
 
 
